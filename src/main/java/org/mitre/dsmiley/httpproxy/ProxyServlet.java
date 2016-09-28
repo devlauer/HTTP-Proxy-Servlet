@@ -29,7 +29,10 @@ import org.apache.http.client.params.ClientPNames;
 import org.apache.http.client.params.CookiePolicy;
 import org.apache.http.client.utils.URIUtils;
 import org.apache.http.entity.InputStreamEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.WinHttpClients;
 import org.apache.http.impl.conn.tsccm.ThreadSafeClientConnManager;
 import org.apache.http.message.BasicHeader;
 import org.apache.http.message.BasicHttpEntityEnclosingRequest;
@@ -169,6 +172,17 @@ public class ProxyServlet extends HttpServlet {
    * SystemDefaultHttpClient uses PoolingClientConnectionManager. In any case, it should be thread-safe. */
   protected HttpClient createHttpClient(HttpParams hcParams) {
     try {
+    	if (!WinHttpClients.isWinAuthAvailable()) {
+            System.out.println("Integrated Win auth is not supported!!!");
+        }
+    	else
+    	{
+            HttpClientBuilder builder = WinHttpClients.custom();
+            builder.disableCookieManagement();
+            builder.disableRedirectHandling();
+            return  builder.build();
+    	}
+
       //as of HttpComponents v4.2, this class is better since it uses System
       // Properties:
       Class<?> clientClazz = Class.forName("org.apache.http.impl.client.SystemDefaultHttpClient");
