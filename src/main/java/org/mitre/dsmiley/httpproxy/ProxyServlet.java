@@ -16,6 +16,23 @@
 
 package org.mitre.dsmiley.httpproxy;
 
+import java.io.Closeable;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.lang.reflect.Constructor;
+import java.net.HttpCookie;
+import java.net.URI;
+import java.util.BitSet;
+import java.util.Enumeration;
+import java.util.Formatter;
+import java.util.List;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpEntityEnclosingRequest;
@@ -23,13 +40,21 @@ import org.apache.http.HttpHeaders;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
+import org.apache.http.auth.AuthSchemeProvider;
 import org.apache.http.client.HttpClient;
+import org.apache.http.client.config.AuthSchemes;
 import org.apache.http.client.methods.AbortableHttpRequest;
 import org.apache.http.client.params.ClientPNames;
 import org.apache.http.client.params.CookiePolicy;
 import org.apache.http.client.utils.URIUtils;
+import org.apache.http.config.Registry;
+import org.apache.http.config.RegistryBuilder;
 import org.apache.http.entity.InputStreamEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.auth.BasicSchemeFactory;
+import org.apache.http.impl.auth.DigestSchemeFactory;
+import org.apache.http.impl.auth.KerberosSchemeFactory;
+import org.apache.http.impl.auth.NTLMSchemeFactory;
+import org.apache.http.impl.auth.SPNegoSchemeFactory;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.WinHttpClients;
@@ -41,22 +66,6 @@ import org.apache.http.message.HeaderGroup;
 import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpParams;
 import org.apache.http.util.EntityUtils;
-
-import javax.servlet.ServletException;
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.io.Closeable;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.lang.reflect.Constructor;
-import java.net.HttpCookie;
-import java.net.URI;
-import java.util.BitSet;
-import java.util.Enumeration;
-import java.util.Formatter;
-import java.util.List;
 
 /**
  * An HTTP reverse proxy/gateway servlet. It is designed to be extended for customization
@@ -178,6 +187,14 @@ public class ProxyServlet extends HttpServlet {
     	else
     	{
             HttpClientBuilder builder = WinHttpClients.custom();
+            Registry<AuthSchemeProvider> authSchemeRegistry = RegistryBuilder.<AuthSchemeProvider>create()
+                    .register(AuthSchemes.BASIC, new BasicSchemeFactory())
+                    .register(AuthSchemes.DIGEST, new DigestSchemeFactory())
+                    .register(AuthSchemes.SPNEGO, new SPNegoSchemeFactory())
+                    .register(AuthSchemes.NTLM, new NTLMSchemeFactory())
+                    .register(AuthSchemes.KERBEROS, new KerberosSchemeFactory())
+                    .build();
+            builder.setDefaultAuthSchemeRegistry(authSchemeRegistry);
             builder.disableCookieManagement();
             builder.disableRedirectHandling();
             return  builder.build();
