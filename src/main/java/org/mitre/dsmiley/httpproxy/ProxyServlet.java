@@ -41,6 +41,9 @@ import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
 import org.apache.http.auth.AuthSchemeProvider;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.NTCredentials;
+import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.AuthSchemes;
 import org.apache.http.client.methods.AbortableHttpRequest;
@@ -55,8 +58,11 @@ import org.apache.http.impl.auth.DigestSchemeFactory;
 import org.apache.http.impl.auth.KerberosSchemeFactory;
 import org.apache.http.impl.auth.NTLMSchemeFactory;
 import org.apache.http.impl.auth.SPNegoSchemeFactory;
+import org.apache.http.impl.auth.win.WindowsCredentialsProvider;
+import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.SystemDefaultCredentialsProvider;
 import org.apache.http.impl.client.WinHttpClients;
 import org.apache.http.impl.conn.tsccm.ThreadSafeClientConnManager;
 import org.apache.http.message.BasicHeader;
@@ -191,10 +197,18 @@ public class ProxyServlet extends HttpServlet {
                     .register(AuthSchemes.BASIC, new BasicSchemeFactory())
                     .register(AuthSchemes.DIGEST, new DigestSchemeFactory())
                     .register(AuthSchemes.SPNEGO, new SPNegoSchemeFactory())
-                    .register(AuthSchemes.NTLM, new JCIFSNTLMSchemeFactory())
+                    .register(AuthSchemes.NTLM, new NTLMSchemeFactory())
                     .register(AuthSchemes.KERBEROS, new KerberosSchemeFactory())
                     .build();
             builder.setDefaultAuthSchemeRegistry(authSchemeRegistry);
+            String username = getConfigParam("user");
+            String password = getConfigParam("password");
+            String domain = getConfigParam("domain");
+            String host = getConfigParam("host");
+            NTCredentials cred = new NTCredentials(username, password, host, domain);
+            CredentialsProvider credsProvider = new WindowsCredentialsProvider(new SystemDefaultCredentialsProvider());
+            credsProvider.setCredentials( AuthScope.ANY, cred );
+            builder.setDefaultCredentialsProvider(credsProvider);
             builder.disableCookieManagement();
             builder.disableRedirectHandling();
             return  builder.build();
