@@ -191,7 +191,7 @@ public class ProxyServlet extends HttpServlet {
                     .register(AuthSchemes.BASIC, new BasicSchemeFactory())
                     .register(AuthSchemes.DIGEST, new DigestSchemeFactory())
                     .register(AuthSchemes.SPNEGO, new SPNegoSchemeFactory())
-                    .register(AuthSchemes.NTLM, new NTLMSchemeFactory())
+                    .register(AuthSchemes.NTLM, new JCIFSNTLMSchemeFactory())
                     .register(AuthSchemes.KERBEROS, new KerberosSchemeFactory())
                     .build();
             builder.setDefaultAuthSchemeRegistry(authSchemeRegistry);
