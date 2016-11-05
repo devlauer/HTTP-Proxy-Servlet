@@ -34,6 +34,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpEntityEnclosingRequest;
@@ -79,6 +81,7 @@ import org.apache.http.message.BasicHttpRequest;
 import org.apache.http.message.HeaderGroup;
 import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpParams;
+import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
 
 import waffle.windows.auth.IWindowsCredentialsHandle;
@@ -124,7 +127,7 @@ public class ProxyServlet extends HttpServlet {
 					HttpClientRefreshThread.sleep(refreshTime);
 					HttpGet get = new HttpGet(refreshURL);
 					addBrowserHeader(get);
-					getProxyClient().execute(get);
+					getProxyClient().execute(get,proxyContext);
 					get.reset();
 				} catch (InterruptedException e) {
 					return;
@@ -171,6 +174,8 @@ public class ProxyServlet extends HttpServlet {
 	protected HttpHost targetHost;// URIUtils.extractHost(targetUriObj);
 
 	private HttpClient proxyClient;
+	private HttpContext proxyContext;
+	private String cookieString;
 
 	@Override
 	public String getServletInfo() {
@@ -248,8 +253,8 @@ public class ProxyServlet extends HttpServlet {
 			String negotiateURL = getConfigParam("negotiate.url");
 			String negotiateSPN = getConfigParam("negotiate.spn");
 			if (negotiateURL != null && negotiateSPN != null) {
-				log("negotiate url:" + negotiateURL);
-				log("negotiate spn:" + negotiateSPN);
+				System.out.println("negotiate url:" + negotiateURL);
+				System.out.println("negotiate spn:" + negotiateSPN);
 				// initialize the Windows security Context to get the negotiate
 				// client token
 				IWindowsSecurityContext clientContext = null;
@@ -258,18 +263,19 @@ public class ProxyServlet extends HttpServlet {
 				clientCredentials = WindowsCredentialsHandleImpl.getCurrent(SECURITY_PACKAGE);
 				clientCredentials.initialize();
 				String username = WindowsAccountImpl.getCurrentUsername();
-				log("credentials for user " + username + " get prepared");
+				System.out.println("credentials for user " + username + " get prepared");
 				byte[] token = clientContext.getToken();
 				// encode the token with Base64 to be able to add it to the http
 				// header
 				String clientToken = Base64.encodeBase64String(token);
-
+				System.out.println("clientToken"+clientToken);
 				// if there is only a negotiate url the rest of the
 				// authorization is based on cookies
 				// so we need to support them.
 				CookieStore cookieStore = new BasicCookieStore();
 				RequestConfig globalConfig = RequestConfig.custom().setCookieSpec(CookieSpecs.DEFAULT).build();
 				HttpClientContext context = HttpClientContext.create();
+				proxyContext=context;
 				context.setCookieStore(cookieStore);
 				HttpClient httpClient = HttpClients.custom().disableRedirectHandling()
 						.setDefaultRequestConfig(globalConfig).setDefaultCookieStore(cookieStore).build();
@@ -282,13 +288,12 @@ public class ProxyServlet extends HttpServlet {
 				HttpResponse rep = httpClient.execute(browserHttpGet, context);
 
 				if (rep.getStatusLine().getStatusCode() == 401) {
-					log("negotiate requested - sending negotiate client token");
+					System.out.println("negotiate requested - sending negotiate client token");
 					HttpGet negotiateHttpGet = new HttpGet(negotiateURL);
 					addBrowserHeader(negotiateHttpGet);
 					negotiateHttpGet.addHeader("Authorization", "Negotiate " + clientToken);
 					HttpResponse response = httpClient.execute(negotiateHttpGet, context);
-					log("http result code of negotiate request:" + response.getStatusLine().getStatusCode());
-					negotiateHttpGet.releaseConnection();
+					System.out.println("http result code of negotiate request:" + response.getStatusLine().getStatusCode());
 					// now the url needs to be called periodically to keep the
 					// cookie and connection alive
 					String refreshTimeString = getConfigParam("negotiate.refreshtime");
@@ -298,8 +303,19 @@ public class ProxyServlet extends HttpServlet {
 					}
 					HttpClientRefreshThread thread = new HttpClientRefreshThread(refreshTime, negotiateURL);
 					thread.start();
+					List<org.apache.http.cookie.Cookie> cookies = context.getCookieStore().getCookies();
+					cookieString = "";
+					int size = cookies.size()-1;
+					for (int i=0;i<cookies.size();i++)
+					{
+						cookieString+=cookies.get(i).getName();
+						cookieString+="=";
+						cookieString+=cookies.get(i).getValue();
+						if(i!=size)
+							cookieString+="; ";
+					}
 				} else {
-					log("No negotiate requested");
+					System.out.println("No negotiate requested");
 				}
 			} else {
 				if (!WinHttpClients.isWinAuthAvailable()) {
@@ -351,7 +367,7 @@ public class ProxyServlet extends HttpServlet {
 				"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36");
 		browserHttpGet.addHeader("Accept",
 				"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
-		browserHttpGet.addHeader("Accept-Encoding", "gzip, deflate, sdch, br");
+		browserHttpGet.addHeader("Accept-Encoding", "identity");
 		browserHttpGet.addHeader("Accept-Language", "de-DE,de;q=0.8,en-US;q=0.6,en;q=0.4");
 	}
 
@@ -393,7 +409,7 @@ public class ProxyServlet extends HttpServlet {
 			try {
 				((Closeable) proxyClient).close();
 			} catch (IOException e) {
-				log("While destroying servlet, shutting down HttpClient: " + e, e);
+				System.out.println("While destroying servlet, shutting down HttpClient: " + e.getMessage());
 			}
 		} else {
 			// Older releases require we do this:
@@ -423,13 +439,17 @@ public class ProxyServlet extends HttpServlet {
 		HttpRequest proxyRequest;
 		// spec: RFC 2616, sec 4.3: either of these two headers signal that
 		// there is a message body.
+		System.out.println("proxyrequestURI"+proxyRequestUri);
 		if (servletRequest.getHeader(HttpHeaders.CONTENT_LENGTH) != null
 				|| servletRequest.getHeader(HttpHeaders.TRANSFER_ENCODING) != null) {
+			
 			proxyRequest = newProxyRequestWithEntity(method, proxyRequestUri, servletRequest);
 		} else {
 			proxyRequest = new BasicHttpRequest(method, proxyRequestUri);
 		}
 
+		proxyRequest.addHeader(org.apache.http.cookie.SM.COOKIE, cookieString);
+		System.out.println("added cookie::"+cookieString);
 		addBrowserHeader(proxyRequest);
 		copyRequestHeaders(servletRequest, proxyRequest);
 
@@ -439,10 +459,12 @@ public class ProxyServlet extends HttpServlet {
 		try {
 			// Execute the request
 			if (doLog) {
-				log("proxy " + method + " uri: " + servletRequest.getRequestURI() + " -- "
+				System.out.println("proxy " + method + " uri: " + servletRequest.getRequestURI() + " -- "
 						+ proxyRequest.getRequestLine().getUri());
 			}
-			proxyResponse = proxyClient.execute(getTargetHost(servletRequest), proxyRequest);
+			System.out.println("targethost:"+getTargetHost(servletRequest));
+			System.out.println(proxyRequest.getRequestLine().toString());
+			proxyResponse = proxyClient.execute(getTargetHost(servletRequest), proxyRequest,proxyContext);
 
 			// Process the response:
 
@@ -521,7 +543,7 @@ public class ProxyServlet extends HttpServlet {
 		try {
 			closeable.close();
 		} catch (IOException e) {
-			log(e.getMessage(), e);
+			System.out.println(e.getMessage());
 		}
 	}
 
@@ -534,7 +556,7 @@ public class ProxyServlet extends HttpServlet {
 		try {
 			EntityUtils.consume(entity);
 		} catch (IOException e) {// ignore
-			log(e.getMessage(), e);
+			System.out.println(e.getMessage());
 		}
 	}
 
@@ -589,10 +611,26 @@ public class ProxyServlet extends HttpServlet {
 				headerValue = host.getHostName();
 				if (host.getPort() != -1)
 					headerValue += ":" + host.getPort();
+				System.out.println("add request header " + headerName + " with value " + headerValue);
 			} else if (headerName.equalsIgnoreCase(org.apache.http.cookie.SM.COOKIE)) {
-				headerValue = getRealCookie(headerValue);
+				//headerValue = getRealCookie(headerValue);
+			} else if (headerName.equalsIgnoreCase("Authorization"))
+			{
+				// no authorization because it is set by the proxy itself
 			}
-			log("add request header " + headerName + " with value " + headerValue);
+			else if(headerName.equalsIgnoreCase("User-Agent"))
+			{
+				//nothing because the header of the browser needs to be set
+			}
+			else if(headerName.equalsIgnoreCase("Accept-Encoding"))
+			{
+				// nothing no encoding is accepted
+			}
+			else
+			{
+				System.out.println("add request header " + headerName + " with value " + headerValue);
+			}
+			
 			proxyRequest.addHeader(headerName, headerValue);
 		}
 	}
@@ -706,7 +744,21 @@ public class ProxyServlet extends HttpServlet {
 		HttpEntity entity = proxyResponse.getEntity();
 		if (entity != null) {
 			OutputStream servletOutputStream = servletResponse.getOutputStream();
-			entity.writeTo(servletOutputStream);
+			if(entity.getContentType()!=null&&entity.getContentType().getValue()!=null&&entity.getContentType().getValue().contains("application/json"))
+			{
+				ByteArrayOutputStream baos = new ByteArrayOutputStream();
+				IOUtils.copy(entity.getContent(), baos);
+				String response = new String(baos.toByteArray());
+				String targetURL = getConfigParam("targetUri");
+				String proxyURL = getConfigParam("proxyURL");
+				System.out.println("replacing "+targetURL+" by "+proxyURL);
+				String replacedJSON = response.replaceAll(targetURL, proxyURL);
+				IOUtils.write(replacedJSON, servletOutputStream);
+			}
+			else
+			{
+				entity.writeTo(servletOutputStream);
+			}
 		}
 	}
 
