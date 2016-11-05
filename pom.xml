@@ -248,15 +248,16 @@
 		</profile>
 	</profiles>
 
-	<distributionManagement>
-		<snapshotRepository>
-			<id>ossrh</id>
-			<url>https://oss.sonatype.org/content/repositories/snapshots</url>
-		</snapshotRepository>
-		<repository>
-			<id>ossrh</id>
-			<url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
-		</repository>
-	</distributionManagement>
-
+  <distributionManagement>
+    <repository>
+      <id>elnarion.releases</id>
+      <name>elnarion.releases</name>
+      <url>https://prodserver/nexus/content/repositories/releases/</url>
+    </repository>
+    <snapshotRepository>
+      <id>elnarion.snapshots</id>
+      <name>elnarion.snapshots</name>
+      <url>https://prodserver/nexus/content/repositories/snapshots/</url>
+    </snapshotRepository>
+  </distributionManagement>
 </project>
