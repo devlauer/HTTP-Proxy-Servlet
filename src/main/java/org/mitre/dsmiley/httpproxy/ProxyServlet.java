@@ -16,6 +16,7 @@
 
 package org.mitre.dsmiley.httpproxy;
 
+import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -365,10 +366,11 @@ public class ProxyServlet extends HttpServlet {
 	private void addBrowserHeader(HttpRequest browserHttpGet) {
 		browserHttpGet.addHeader("User-Agent",
 				"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36");
-		browserHttpGet.addHeader("Accept",
-				"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
-		browserHttpGet.addHeader("Accept-Encoding", "identity");
-		browserHttpGet.addHeader("Accept-Language", "de-DE,de;q=0.8,en-US;q=0.6,en;q=0.4");
+		browserHttpGet.addHeader("Cache-Control","no-cache");
+		browserHttpGet.addHeader("Accept-Encoding","deflate,br");
+		browserHttpGet.addHeader("Accept","*/*");
+		browserHttpGet.addHeader("Accept-Language", "de-DE,de;q=0.8,en-US;q=0.6,en;q=0");
+		browserHttpGet.addHeader("Origin","chrome-extension://fhbjgbiflinjbdqqehcddcbncdddomop");
 	}
 
 	/**
@@ -453,8 +455,15 @@ public class ProxyServlet extends HttpServlet {
 		addBrowserHeader(proxyRequest);
 		copyRequestHeaders(servletRequest, proxyRequest);
 
-		setXForwardedForHeader(servletRequest, proxyRequest);
+		//setXForwardedForHeader(servletRequest, proxyRequest);
 
+		System.out.println("method"+method);
+		System.out.println("final header showing");
+		for(Header header:proxyRequest.getAllHeaders())
+		{
+			System.out.println(header.getName()+"::"+header.getValue()+"::");
+		}
+		System.out.println("end final header");
 		HttpResponse proxyResponse = null;
 		try {
 			// Execute the request
@@ -472,6 +481,7 @@ public class ProxyServlet extends HttpServlet {
 			// deprecated but it's the
 			// only way to pass the reason along too.
 			int statusCode = proxyResponse.getStatusLine().getStatusCode();
+			System.out.println(proxyResponse.getStatusLine().getStatusCode()+proxyResponse.getStatusLine().getReasonPhrase());
 			// noinspection deprecation
 			servletResponse.setStatus(statusCode, proxyResponse.getStatusLine().getReasonPhrase());
 
@@ -524,8 +534,11 @@ public class ProxyServlet extends HttpServlet {
 		// Add the input entity (streamed)
 		// note: we don't bother ensuring we close the servletInputStream since
 		// the container handles it
+		String entity = IOUtils.toString(servletRequest.getInputStream());
+		System.out.println("Body:");
+		System.out.println(entity);
 		eProxyRequest
-				.setEntity(new InputStreamEntity(servletRequest.getInputStream(), getContentLength(servletRequest)));
+				.setEntity(new InputStreamEntity(new ByteArrayInputStream(entity.getBytes()), -1));
 		return eProxyRequest;
 	}
 
@@ -598,7 +611,34 @@ public class ProxyServlet extends HttpServlet {
 			return;
 		if (hopByHopHeaders.containsHeader(headerName))
 			return;
-
+		if (headerName.equalsIgnoreCase("Authorization"))
+		{
+			return;
+		}
+		else if(headerName.equalsIgnoreCase("User-Agent"))
+		{
+			return;
+		}
+		else if(headerName.equalsIgnoreCase("Accept-Encoding"))
+		{
+			return;
+		}
+		else if(headerName.equalsIgnoreCase("Cache-Control"))
+		{
+			return;
+		}
+		else if(headerName.equalsIgnoreCase("Accept"))
+		{
+			return;
+		}
+		else if(headerName.equalsIgnoreCase("Accept-Language"))
+		{
+			return;
+		}
+		else if(headerName.equalsIgnoreCase("Origin"))
+		{
+			return;
+		}
 		@SuppressWarnings("unchecked")
 		Enumeration<String> headers = servletRequest.getHeaders(headerName);
 		while (headers.hasMoreElements()) {// sometimes more than one value
@@ -614,23 +654,12 @@ public class ProxyServlet extends HttpServlet {
 				System.out.println("add request header " + headerName + " with value " + headerValue);
 			} else if (headerName.equalsIgnoreCase(org.apache.http.cookie.SM.COOKIE)) {
 				//headerValue = getRealCookie(headerValue);
-			} else if (headerName.equalsIgnoreCase("Authorization"))
-			{
-				// no authorization because it is set by the proxy itself
-			}
-			else if(headerName.equalsIgnoreCase("User-Agent"))
-			{
-				//nothing because the header of the browser needs to be set
-			}
-			else if(headerName.equalsIgnoreCase("Accept-Encoding"))
-			{
-				// nothing no encoding is accepted
-			}
+			} 
 			else
 			{
 				System.out.println("add request header " + headerName + " with value " + headerValue);
 			}
-			
+			System.out.println("Copying request header"+headerName+"headerValue");
 			proxyRequest.addHeader(headerName, headerValue);
 		}
 	}
@@ -652,6 +681,7 @@ public class ProxyServlet extends HttpServlet {
 			HttpServletResponse servletResponse) {
 		for (Header header : proxyResponse.getAllHeaders()) {
 			copyResponseHeader(servletRequest, servletResponse, header);
+			log("Copying resp. header"+header.getName()+" value:"+header.getValue());
 		}
 	}
 
