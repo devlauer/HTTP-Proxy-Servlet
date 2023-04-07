@@ -1,5 +1,4 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>org.mitre.dsmiley.httpproxy</groupId>
@@ -43,7 +42,7 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
 		<!-- works with v4.1 and forward; see .travis.yml -->
-		<httpclient.version>4.5.2</httpclient.version>
+		<httpclient.version>4.5.13</httpclient.version>
 		<!-- the last version to provide LocalTestServer.java -->
 		<httpclient.test.version>4.3.5</httpclient.test.version>
 	</properties>
@@ -80,16 +79,16 @@
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
-			<version>4.12</version>
+			<version>4.13.1</version>
 			<scope>test</scope>
 		</dependency>
 
 		<dependency>
 			<groupId>org.apache.httpcomponents</groupId>
 			<artifactId>httpclient</artifactId>
-			<version>${httpclient.test.version}</version>
-			<classifier>tests</classifier>
+			<version>${httpclient.version}</version>
 			<scope>test</scope>
+			<classifier>tests</classifier>
 		</dependency>
 
 		<dependency>
@@ -99,12 +98,6 @@
 			<scope>test</scope>
 		</dependency>
 
-		<dependency>
-			<groupId>log4j</groupId>
-			<artifactId>log4j</artifactId>
-			<version>1.2.16</version>
-			<scope>test</scope>
-		</dependency>
 		<dependency>
 			<groupId>org.samba.jcifs</groupId>
 			<artifactId>jcifs</artifactId>
@@ -118,7 +111,7 @@
 		<dependency>
 			<groupId>commons-io</groupId>
 			<artifactId>commons-io</artifactId>
-			<version>2.7</version>
+			<version>2.11.0</version>
 		</dependency>
 	</dependencies>
 
